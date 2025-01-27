@@ -22,17 +22,18 @@
 <body>
     <h1>Click the spheres to toggle their color and their neighbors</h1>
     <canvas id="myCanvas"></canvas>
-    <div id="winMessage">You Win! All spheres have been colored!</div>
+    <div id="winMessage">You Win! All spheres are red!</div>
 
     <script type="module">
     import * as THREE from 'three';
 
-    // Global variables
-    const clock = new THREE.Clock();
-    const spherePool = []; // Object pool for spheres
-    const grid = []; // 3x3 grid to track sphere positions
-    const gridSize = 3; // 3x3 grid
-    let isGameWon = false; // Flag to check if the game is won
+    const sphereRadius = 5;
+    const minDistance = 15;
+    const spherePool = [];
+    const connectionMap = new Map();
+    const maxSpheres = 9;
+    const retryLimit = 1000;
+    let isGameWon = false;
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 3000);
@@ -43,126 +44,151 @@
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
 
-    // Light for better visuals
     const light = new THREE.PointLight(0xffffff, 1, 1000);
     light.position.set(50, 50, 50);
     scene.add(light);
 
-    // Create a sphere with a default color
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    function generateRandomPosition(range) {
+        return (Math.random() - 0.5) * range;
+    }
+
+    function isValidPosition(x, y, existingSpheres) {
+        for (const sphere of existingSpheres) {
+            const dx = sphere.position.x - x;
+            const dy = sphere.position.y - y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < minDistance) return false;
+        }
+        return true;
+    }
+
     function createSphere(x, y, index) {
-        const geometry = new THREE.SphereGeometry(5, 32, 32);
-        const material = new THREE.MeshBasicMaterial({ color: 0xffffff }); // White color initially
+        const geometry = new THREE.SphereGeometry(sphereRadius, 32, 32);
+        const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
         const sphere = new THREE.Mesh(geometry, material);
         sphere.position.set(x, y, 0);
         sphere.userData = { index, color: 0xffffff }; // Store index and color
         return sphere;
     }
 
-    // Initialize grid and object pool
-    function initializeGrid() {
-        const spacing = 20; // Distance between spheres
-        let id = 0;
+    function generateRandomConfiguration() {
+        const maxRange = 50;
+        spherePool.length = 0;
+        scene.clear();
 
-        for (let row = 0; row < gridSize; row++) {
-            const gridRow = [];
-            for (let col = 0; col < gridSize; col++) {
-                const x = (col - 1) * spacing; // Centered around 0
-                const y = (1 - row) * spacing; // Centered around 0
-                const sphere = createSphere(x, y, id++);
-                scene.add(sphere);
+        let attempts = 0;
+        while (spherePool.length < maxSpheres) {
+            const x = generateRandomPosition(maxRange);
+            const y = generateRandomPosition(maxRange);
+
+            if (isValidPosition(x, y, spherePool)) {
+                const sphere = createSphere(x, y, spherePool.length);
                 spherePool.push(sphere);
-                gridRow.push(sphere);
+                scene.add(sphere);
+            } else {
+                attempts++;
+                if (attempts > retryLimit) {
+                    console.error("Failed to generate a valid configuration after maximum retries.");
+                    return false;
+                }
             }
-            grid.push(gridRow);
         }
+        return true;
     }
 
-    // Helper to get neighbors of a sphere
-    function getNeighbors(row, col) {
-        const neighbors = [];
+    function buildConnectionMap() {
+        const neighborDistance = 25;
+        connectionMap.clear();
 
-        if (row > 0) neighbors.push(grid[row - 1][col]); // North
-        if (row < gridSize - 1) neighbors.push(grid[row + 1][col]); // South
-        if (col > 0) neighbors.push(grid[row][col - 1]); // West
-        if (col < gridSize - 1) neighbors.push(grid[row][col + 1]); // East
+        spherePool.forEach((sphere, index) => {
+            connectionMap.set(index, []);
+            spherePool.forEach((otherSphere, otherIndex) => {
+                if (index !== otherIndex) {
+                    const dx = sphere.position.x - otherSphere.position.x;
+                    const dy = sphere.position.y - otherSphere.position.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
 
-        return neighbors;
+                    if (distance <= neighborDistance) {
+                        connectionMap.get(index).push(otherIndex);
+                    }
+                }
+            });
+        });
     }
 
-    // Toggle sphere color
-    function toggleSphereColor(sphere) {
-        const isRed = sphere.userData.color === 0xff0000; // Check if it's red
-        sphere.material.color.set(isRed ? 0xffffff : 0xff0000); // Toggle color
-        sphere.userData.color = isRed ? 0xffffff : 0xff0000;
+    function toggleSphereColor(index) {
+        const sphere = spherePool[index];
+        if (sphere.userData.color === 0xffffff) {
+            sphere.material.color.set(0xff0000); // Turn red
+            sphere.userData.color = 0xff0000;
+        } else {
+            sphere.material.color.set(0xffffff); // Turn white
+            sphere.userData.color = 0xffffff;
+        }
+
+        // Toggle neighbors
+        connectionMap.get(index).forEach(neighborIndex => {
+            const neighbor = spherePool[neighborIndex];
+            if (neighbor.userData.color === 0xffffff) {
+                neighbor.material.color.set(0xff0000);
+                neighbor.userData.color = 0xff0000;
+            } else {
+                neighbor.material.color.set(0xffffff);
+                neighbor.userData.color = 0xffffff;
+            }
+        });
+
+        checkWinCondition();
     }
 
-    // Check if the game is won
     function checkWinCondition() {
-        return spherePool.every(sphere => sphere.userData.color === 0xff0000);
-    }
-
-     // Display the win message
-     function displayWinMessage() {
-        const winMessage = document.getElementById('winMessage');
-        winMessage.style.display = 'block';
-    }
-
-    // Handle sphere click
-    function handleClick(sphere) {
-        if (isGameWon) return; // If the game is won, do nothing
-
-        const sphereIndex = sphere.userData.index;
-        const row = Math.floor(sphereIndex / gridSize);
-        const col = sphereIndex % gridSize;
-
-        // Toggle the clicked sphere
-        toggleSphereColor(sphere);
-
-        // Get and toggle neighbors
-        const neighbors = getNeighbors(row, col);
-        neighbors.forEach(toggleSphereColor);
-
-        // Check if the game is won
-        if (checkWinCondition()) {
+        if (spherePool.every(sphere => sphere.userData.color === 0xff0000)) {
             isGameWon = true;
-            displayWinMessage();
+            document.getElementById('winMessage').style.display = 'block';
         }
     }
 
-    // Raycaster for mouse clicks
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
+    function initializeGame() {
+        let validConfiguration = false;
 
-    function onDocumentMouseDown(event) {
-        event.preventDefault();
+        while (!validConfiguration) {
+            spherePool.length = 0;
+            connectionMap.clear();
 
-        // Normalize mouse coordinates
-        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            const success = generateRandomConfiguration();
+            if (!success) return;
+
+            buildConnectionMap();
+            validConfiguration = true;
+        }
+    }
+
+    function onMouseClick(event) {
+        if (isGameWon) return;
+
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
         raycaster.setFromCamera(mouse, camera);
-
-        // Check intersections
         const intersects = raycaster.intersectObjects(spherePool);
 
         if (intersects.length > 0) {
-            const clickedSphere = intersects[0].object;
-            handleClick(clickedSphere);
+            const sphere = intersects[0].object;
+            toggleSphereColor(sphere.userData.index);
         }
     }
 
-    document.addEventListener('mousedown', onDocumentMouseDown, false);
-
-    // Initialize the grid
-    initializeGrid();
-
-    // Animate
     function animate() {
-        const delta = clock.getDelta(); // Delta time
         renderer.render(scene, camera);
         requestAnimationFrame(animate);
     }
 
+    window.addEventListener('click', onMouseClick);
+    initializeGame();
     animate();
     </script>
 </body>
