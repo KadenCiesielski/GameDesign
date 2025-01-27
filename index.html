@@ -4,10 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sphere Completion Game</title>
+    <style>
+        #winMessage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 2em;
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+        }
+    </style>
 </head>
 <body>
     <h1>Click the spheres to toggle their color and their neighbors</h1>
     <canvas id="myCanvas"></canvas>
+    <div id="winMessage">You Win! All spheres have been colored!</div>
 
     <script type="module">
     import * as THREE from 'three';
@@ -17,6 +32,7 @@
     const spherePool = []; // Object pool for spheres
     const grid = []; // 3x3 grid to track sphere positions
     const gridSize = 3; // 3x3 grid
+    let isGameWon = false; // Flag to check if the game is won
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 3000);
@@ -80,8 +96,21 @@
         sphere.userData.color = isRed ? 0xffffff : 0xff0000;
     }
 
+    // Check if the game is won
+    function checkWinCondition() {
+        return spherePool.every(sphere => sphere.userData.color === 0xff0000);
+    }
+
+     // Display the win message
+     function displayWinMessage() {
+        const winMessage = document.getElementById('winMessage');
+        winMessage.style.display = 'block';
+    }
+
     // Handle sphere click
     function handleClick(sphere) {
+        if (isGameWon) return; // If the game is won, do nothing
+
         const sphereIndex = sphere.userData.index;
         const row = Math.floor(sphereIndex / gridSize);
         const col = sphereIndex % gridSize;
@@ -92,6 +121,12 @@
         // Get and toggle neighbors
         const neighbors = getNeighbors(row, col);
         neighbors.forEach(toggleSphereColor);
+
+        // Check if the game is won
+        if (checkWinCondition()) {
+            isGameWon = true;
+            displayWinMessage();
+        }
     }
 
     // Raycaster for mouse clicks
