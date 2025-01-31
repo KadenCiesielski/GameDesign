@@ -20,21 +20,20 @@
     </style>
 </head>
 <body>
-    <h1>Click the spheres to toggle their color and their neighbors</h1>
+    <h1>Click the spheres to toggle their color and those connected</h1>
     <canvas id="myCanvas"></canvas>
-    <div id="winMessage">You Win! All spheres are red!</div>
+    <div id="winMessage">You Win! All spheres have been colored!</div>
 
     <script type="module">
     import * as THREE from 'three';
 
     const sphereRadius = 5;
     const minDistance = (sphereRadius * 2) + 2;
-    const maxDistance = (sphereRadius * 10);
     const spherePool = [];
     const connectionMap = new Map();
     const connectionLines = [];
     const maxSpheres = 9;
-    const retryLimit = 1000;
+    const retryLimit = 3000;
     let isGameWon = false;
 
     const scene = new THREE.Scene();
@@ -62,7 +61,7 @@
             const dx = sphere.position.x - x;
             const dy = sphere.position.y - y;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance < minDistance || distance > maxDistance) return false;
+            if (distance < minDistance) return false;
         }
         return true;
     }
@@ -78,28 +77,33 @@
 
     function generateRandomConfiguration() {
         const maxRange = 50;
-        spherePool.length = 0;
-        connectionLines.length = 0;
-        scene.clear();
-
         let attempts = 0;
-        while (spherePool.length < maxSpheres) {
-            const x = generateRandomPosition(maxRange);
-            const y = generateRandomPosition(maxRange);
 
-            if (isValidPosition(x, y, spherePool)) {
-                const sphere = createSphere(x, y, spherePool.length);
-                spherePool.push(sphere);
-                scene.add(sphere);
-            } else {
-                attempts++;
-                if (attempts > retryLimit) {
-                    console.error("Failed to generate a valid configuration after maximum retries.");
-                    return false;
+        while (attempts < retryLimit) {
+            spherePool.length = 0;
+            connectionMap.clear();
+            connectionLines.length = 0;
+            scene.clear();
+
+            while (spherePool.length < maxSpheres) {
+                const x = generateRandomPosition(maxRange);
+                const y = generateRandomPosition(maxRange);
+                if (isValidPosition(x, y, spherePool)) {
+                    const sphere = createSphere(x, y, spherePool.length);
+                    spherePool.push(sphere);
+                    scene.add(sphere);
                 }
             }
+
+            buildConnectionMap();
+
+            if (isGraphConnected()) return true;
+
+            attempts++;
         }
-        return true;
+
+        console.error("Failed to generate a connected configuration after max retries.");
+        return false;
     }
 
     function buildConnectionMap() {
@@ -132,6 +136,24 @@
         scene.add(line);
     }
 
+    function isGraphConnected() {
+        if (spherePool.length === 0) return false;
+
+        const visited = new Set();
+        const queue = [0];
+
+        while (queue.length > 0) {
+            const current = queue.shift();
+            visited.add(current);
+
+            for (const neighbor of connectionMap.get(current) || []) {
+                if (!visited.has(neighbor)) queue.push(neighbor);
+            }
+        }
+
+        return visited.size === spherePool.length;
+    }
+    
     function toggleSphereColor(index) {
         const sphere = spherePool[index];
         if (sphere.userData.color === 0xffffff) {
