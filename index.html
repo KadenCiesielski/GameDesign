@@ -28,9 +28,11 @@
     import * as THREE from 'three';
 
     const sphereRadius = 5;
-    const minDistance = 15;
+    const minDistance = (sphereRadius * 2) + 2;
+    const maxDistance = (sphereRadius * 10);
     const spherePool = [];
     const connectionMap = new Map();
+    const connectionLines = [];
     const maxSpheres = 9;
     const retryLimit = 1000;
     let isGameWon = false;
@@ -60,7 +62,7 @@
             const dx = sphere.position.x - x;
             const dy = sphere.position.y - y;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance < minDistance) return false;
+            if (distance < minDistance || distance > maxDistance) return false;
         }
         return true;
     }
@@ -77,6 +79,7 @@
     function generateRandomConfiguration() {
         const maxRange = 50;
         spherePool.length = 0;
+        connectionLines.length = 0;
         scene.clear();
 
         let attempts = 0;
@@ -100,7 +103,7 @@
     }
 
     function buildConnectionMap() {
-        const neighborDistance = 25;
+        const neighborDistance = minDistance * 1.5;
         connectionMap.clear();
 
         spherePool.forEach((sphere, index) => {
@@ -113,10 +116,20 @@
 
                     if (distance <= neighborDistance) {
                         connectionMap.get(index).push(otherIndex);
+                        createConnectionLine(sphere, otherSphere);
                     }
                 }
             });
         });
+    }
+
+    function createConnectionLine(sphere1, sphere2) {
+        const material = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 2 });
+        const points = [sphere1.position, sphere2.position];
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const line = new THREE.Line(geometry, material);
+        connectionLines.push(line);
+        scene.add(line);
     }
 
     function toggleSphereColor(index) {
@@ -157,6 +170,7 @@
         while (!validConfiguration) {
             spherePool.length = 0;
             connectionMap.clear();
+            connectionLines.length = 0;
 
             const success = generateRandomConfiguration();
             if (!success) return;
