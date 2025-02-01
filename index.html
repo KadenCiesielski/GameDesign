@@ -64,14 +64,18 @@
 
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
-
+    
     function startGame() {
         document.getElementById('menu').style.display = 'none';
         document.getElementById('winScreen').style.display = 'none';
 
         resetGame();  // Clear any previous game state
-        gameStarted = true;  // Allow interactions
-        initializeGame();  // Generate a new valid game board
+        const success = initializeGame();
+        if (success) {
+            gameStarted = true; // Only allow clicks if board is valid
+        } else {
+            console.error("Failed to initialize game.");
+        }
     }
     window.startGame = startGame;
 
@@ -128,6 +132,8 @@
         );
         sphere.position.set(x, y, 0);
         sphere.userData = { index, color: 0xffffff }; // Store index and color
+
+        scene.add(sphere);  // Ensure it's added to the scene
         return sphere;
     }
 
@@ -135,6 +141,7 @@
         const maxRange = 50;
         let attempts = 0;
         while (attempts < retryLimit) {
+            console.log(`Attempt ${attempts + 1}`);
             resetGame();
             while (spherePool.length < maxSpheres) {
                 const x = generateRandomPosition(maxRange);
