@@ -36,28 +36,6 @@
 
     <canvas id="myCanvas"></canvas>
 
-    <script>
-        function startGame() {
-            document.getElementById('menu').style.display = 'none';
-            document.getElementById('winScreen').style.display = 'none';
-            initializeGame(); // Directly start the game
-        }
-    
-        function showInfo() {
-            document.getElementById('infoScreen').style.display = 'flex';
-        }
-    
-        function closeInfo() {
-            document.getElementById('infoScreen').style.display = 'none';
-        }
-    
-        function returnToMenu() {
-            document.getElementById('winScreen').style.display = 'none';
-            document.getElementById('menu').style.display = 'flex';
-            resetGame(); // Directly reset the game
-        }
-    </script>
-
     <script type="module">
     import * as THREE from 'three';
     
@@ -87,15 +65,47 @@
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
+    function startGame() {
+        document.getElementById('menu').style.display = 'none';
+        document.getElementById('winScreen').style.display = 'none';
+
+        resetGame();  // Clear any previous game state
+        gameStarted = true;  // Allow interactions
+        initializeGame();  // Generate a new valid game board
+    }
+    window.startGame = startGame;
+
     function resetGame() {
         gameStarted = false;
         isGameWon = false;
+
+        // Remove spheres
         spherePool.forEach(sphere => scene.remove(sphere));
-        connectionLines.forEach(line => scene.remove(line));
         spherePool.length = 0;
+
+        // Remove connection lines
+        connectionLines.forEach(line => scene.remove(line));
         connectionLines.length = 0;
         connectionMap.clear();
     }
+    window.resetGame = resetGame;
+
+    function showInfo() {
+        document.getElementById('infoScreen').style.display = 'flex';
+    }
+    window.showInfo = showInfo;
+
+    function closeInfo() {
+        document.getElementById('infoScreen').style.display = 'none';
+    }
+    window.closeInfo = closeInfo;
+
+    function returnToMenu() {
+        document.getElementById('winScreen').style.display = 'none';
+        document.getElementById('menu').style.display = 'flex';
+        resetGame(); // Directly reset the game
+    }
+    window.returnToMenu = returnToMenu;
 
     function generateRandomPosition(range) {
         return (Math.random() - 0.5) * range;
@@ -253,7 +263,6 @@
     }
 
     window.addEventListener('click', onMouseClick);
-    initializeGame();
     animate();
     </script>
 </body>
